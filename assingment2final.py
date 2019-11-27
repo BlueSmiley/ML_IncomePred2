@@ -1,3 +1,4 @@
+# half these imports arent used anymore and can be safely removed
 import pandas as pd
 import numpy as np
 from sklearn import  linear_model
@@ -24,20 +25,23 @@ import matplotlib.pyplot as plt
 from imblearn.over_sampling import SMOTENC
 
 def main():
+    # Load input and split into train, test and validation
     input_file = "tcd-ml-1920-group-income-train.csv"
     data = pd.read_csv(input_file, header = 0)
     print("Starting")
     train, validation = train_test_split(data, test_size=0.20)
     train, test = train_test_split(train, test_size=0.2)
     
+    #Preprocess on train using target encoding
     (train,encoder) = clean_train_data_target_encoded(train)
     
+    # load final data and preprocess it using trained encoder
     actual_file = "tcd-ml-1920-group-income-test.csv"
     finalData = pd.read_csv(actual_file, header = 0)
     finalData = finalData.iloc[:,:-1]
     finalData = clean_data(finalData, encoder)
     
-    
+    # preprocessing for train and validation
     train_y = train.iloc[:,-1]
     train_X = train.iloc[:,:-1]
     test_y = test.iloc[:,-1]
@@ -50,6 +54,8 @@ def main():
     
     print("training data cleaned")
             
+    # Convert to usable validation format for lightboost
+    # All settings actually default here excpet for learning rate, metric
     lgb_train = lgb.Dataset(train_X, train_y)
     lgb_eval = lgb.Dataset(test_X, test_y, reference=lgb_train)
     # specify your configurations as a dict
@@ -65,6 +71,8 @@ def main():
         'verbose': 0
     }
     
+    # Num boost rounds put to 100k but finishes around 40-80k anyway
+    # Ealry stopping round of 200 to avoid local minima
     print('Starting training...')
     gbm = lgb.train(params,
                 lgb_train,
@@ -73,6 +81,7 @@ def main():
                 early_stopping_rounds=200)
     print('Starting predicting...')
     
+    # Calculate and print out stats for local validation set
     pred = gbm.predict(val_X, num_iteration=gbm.best_iteration)
     print("Root Mean squared error: %.2f"
         %  sqrt(mean_squared_error(val_y, pred)))
@@ -82,8 +91,7 @@ def main():
     # Explained variance score: 1 is perfect prediction
     print('Variance score: %.2f' % r2_score(val_y, pred))
     
-     # The rest essentially calculates the answers for the actual thing
-
+     # Calculate final predictions for actual dataset and write to file
     results = gbm.predict(finalData, num_iteration=gbm.best_iteration)
     output_file = "tcd-ml-1920-group-income-submission.csv"
     output =  pd.read_csv(output_file, header = 0, index_col=False)
@@ -92,6 +100,7 @@ def main():
     print("We done :)")
     
 
+# Code to preprocess using a trained encoder
 def clean_data(data, encoder):
     """Clean the final data using the given one hot encoder"""
     data = data.reset_index(drop=True)
@@ -100,6 +109,7 @@ def clean_data(data, encoder):
     #data2 = data2.fillna(method="ffill")
     return data2
 
+# Code to preprocess and train encoder on data
 def clean_train_data_target_encoded(data):
     #uses target encodier instead
     data = data.reset_index(drop=True)
@@ -120,6 +130,8 @@ def clean_train_data_target_encoded(data):
     
     return (data2,encoder)
 
+# Preprocessing steps for data. Mostly just fill in na with mean or new category
+# Depending on type of column
 def process_features(data):
     data = data.drop('Instance', 1)
     data["Hair Color"] = data["Hair Color"].fillna("Unknown")
